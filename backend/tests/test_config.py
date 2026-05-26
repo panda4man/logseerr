@@ -1,0 +1,21 @@
+from app.config import Settings
+
+
+def test_settings_defaults():
+    s = Settings()
+    assert s.loki_url == "http://localhost:3100"
+    assert s.embed_url == "http://localhost:8080"
+    assert s.embed_model == "nomic-embed-text"
+    assert s.qdrant_url == "http://localhost:6333"
+    assert s.ollama_url == "http://localhost:11434"
+    assert s.ollama_model == "llama3"
+    assert s.ingest_interval_minutes == 15
+    assert s.collection_name == "logseerr"
+
+
+def test_settings_from_env(monkeypatch):
+    monkeypatch.setenv("LOKI_URL", "http://loki:3100")
+    monkeypatch.setenv("OLLAMA_MODEL", "mistral")
+    s = Settings()
+    assert s.loki_url == "http://loki:3100"
+    assert s.ollama_model == "mistral"
