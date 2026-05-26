@@ -1,3 +1,12 @@
+"""Application configuration via pydantic-settings.
+
+All settings can be overridden by environment variables or a .env file
+(loaded relative to the current working directory).
+
+Testing note: always instantiate ``Settings()`` directly in tests rather than
+importing the module-level ``settings`` singleton. The singleton is created at
+import time and will not reflect ``monkeypatch.setenv`` changes.
+"""
 from pydantic_settings import BaseSettings
 
 
