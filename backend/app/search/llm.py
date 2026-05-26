@@ -26,6 +26,6 @@ async def generate_answer(
                 timeout=120,
             )
             resp.raise_for_status()
-        return resp.json()["response"].strip()
+            return resp.json()["response"].strip()
     except (httpx.HTTPError, KeyError):
         return None
