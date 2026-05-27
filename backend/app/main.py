@@ -4,9 +4,12 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
+import httpx
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient
 
@@ -111,7 +114,36 @@ class SearchResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    checks: dict[str, str] = {}
+
+    # Qdrant
+    try:
+        await qdrant.get_collections()
+        checks["qdrant"] = "ok"
+    except Exception:
+        checks["qdrant"] = "unavailable"
+
+    # Embed server (Ollama embeddings instance)
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{settings.embed_url}/api/tags", timeout=5)
+            resp.raise_for_status()
+        checks["embed"] = "ok"
+    except Exception:
+        checks["embed"] = "unavailable"
+
+    # LLM server (Ollama)
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{settings.ollama_url}/api/tags", timeout=5)
+            resp.raise_for_status()
+        checks["llm"] = "ok"
+    except Exception:
+        checks["llm"] = "unavailable"
+
+    all_ok = all(v == "ok" for v in checks.values())
+    status_code = 200 if all_ok else 503
+    return JSONResponse(content={"status": "ok" if all_ok else "degraded", **checks}, status_code=status_code)
 
 
 @app.post("/search", response_model=SearchResponse)

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 async def client():
     mock_qdrant = AsyncMock()
     mock_qdrant.query_points = AsyncMock(return_value=MagicMock(points=[]))
+    mock_qdrant.get_collections = AsyncMock(return_value=MagicMock(collections=[]))
 
     mock_scheduler = MagicMock()
     mock_scheduler.add_job = MagicMock()
@@ -26,10 +27,37 @@ async def client():
             yield c
 
 
-async def test_health(client):
+@respx.mock
+async def test_health_all_services_ok(client):
+    respx.get("http://localhost:8080/api/tags").mock(
+        return_value=httpx.Response(200, json={"models": []})
+    )
+    respx.get("http://localhost:11434/api/tags").mock(
+        return_value=httpx.Response(200, json={"models": []})
+    )
     resp = await client.get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["qdrant"] == "ok"
+    assert body["embed"] == "ok"
+    assert body["llm"] == "ok"
+
+
+@respx.mock
+async def test_health_degraded_when_embed_down(client):
+    respx.get("http://localhost:8080/api/tags").mock(
+        return_value=httpx.Response(503)
+    )
+    respx.get("http://localhost:11434/api/tags").mock(
+        return_value=httpx.Response(200, json={"models": []})
+    )
+    resp = await client.get("/health")
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["status"] == "degraded"
+    assert body["embed"] == "unavailable"
+    assert body["llm"] == "ok"
 
 
 @respx.mock

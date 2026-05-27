@@ -25,9 +25,14 @@ cp .env.example .env
 2. Edit `.env` with reachable service URLs:
 
 - `LOKI_URL`
-- `EMBED_URL`
-- `OLLAMA_URL`
+- `EMBED_URL` — Ollama embeddings instance (serves OpenAI-compatible `/v1/embeddings`)
+- `OLLAMA_URL` — Ollama LLM instance (serves `/api/generate` for RAG)
 - `VITE_API_BASE_URL`
+
+> **Dual-Ollama setup:** The project uses two separate Ollama instances — one
+> dedicated to embeddings (port `11435`) and one for LLM generation (port
+> `11434`). This keeps embedding workloads isolated from inference. Both run on
+> the same unraid host (`192.168.50.46`) but could be split across machines.
 
 3. Build and run:
 
@@ -87,7 +92,13 @@ npm run build
 
 ## API
 
-- `GET /health` → `{"status":"ok"}`
+- `GET /health` → checks connectivity to Qdrant, embed server, and LLM:
+
+```json
+{ "status": "ok", "qdrant": "ok", "embed": "ok", "llm": "ok" }
+```
+
+Returns `503` with `"status": "degraded"` if any service is unreachable.
 - `POST /search` with JSON body:
 
 ```json
