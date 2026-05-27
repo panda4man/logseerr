@@ -6,3 +6,5 @@ state.db
 node_modules/
 dist/
 .vite/
+
+.worktrees/
