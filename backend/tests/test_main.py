@@ -145,3 +145,93 @@ async def test_search_returns_503_when_embed_fails(app_ctx):
     resp = await client.post("/search", json={"query": "any errors?"})
     assert resp.status_code == 503
     assert "Embedding service unavailable" in resp.json()["detail"]
+
+
+def _scroll_point(service, levels, time_range="2024-05-27 21:00–21:05 UTC"):
+    return MagicMock(
+        payload={
+            "service": service,
+            "time_range": time_range,
+            "start_time": 1716843600.0,
+            "levels": levels,
+        }
+    )
+
+
+@respx.mock
+async def test_meta_query_routes_to_aggregation(app_ctx):
+    client, mock_qdrant = app_ctx
+    mock_qdrant.scroll = AsyncMock(
+        return_value=(
+            [_scroll_point("plex", ["error"]), _scroll_point("sonarr", ["info"])],
+            None,
+        )
+    )
+    embed_route = respx.post("http://localhost:8080/v1/embeddings").mock(
+        return_value=httpx.Response(200, json={"data": [{"embedding": [0.1]}]})
+    )
+    generate_route = respx.post("http://localhost:11434/api/generate").mock(
+        return_value=httpx.Response(200, json={"response": "plex has the most errors."})
+    )
+    resp = await client.post(
+        "/search", json={"query": "which container has the most errors?"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer_status"] == "ok"
+    assert body["answer"] == "plex has the most errors."
+    assert body["sources"] == []
+    # aggregation path: no embedding call, scroll used not query_points
+    assert not embed_route.called
+    assert mock_qdrant.scroll.called
+    assert not mock_qdrant.query_points.called
+    # the deterministic stats reach the LLM prompt
+    import json
+
+    prompt = json.loads(generate_route.calls[0].request.content)["prompt"]
+    assert "Distinct containers with errors: 1" in prompt
+
+
+@respx.mock
+async def test_meta_query_no_results(app_ctx):
+    client, mock_qdrant = app_ctx
+    mock_qdrant.scroll = AsyncMock(return_value=([], None))
+    generate_route = respx.post("http://localhost:11434/api/generate").mock(
+        return_value=httpx.Response(200, json={"response": "nope"})
+    )
+    resp = await client.post("/search", json={"query": "how many containers have errors?"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer_status"] == "no_results"
+    assert body["answer"] is None
+    assert not generate_route.called
+
+
+@respx.mock
+async def test_content_query_uses_semantic_path(app_ctx):
+    client, mock_qdrant = app_ctx
+    mock_qdrant.scroll = AsyncMock(return_value=([], None))
+    mock_qdrant.query_points = AsyncMock(
+        return_value=MagicMock(points=[_make_point()])
+    )
+    respx.post("http://localhost:8080/v1/embeddings").mock(
+        return_value=httpx.Response(200, json={"data": [{"embedding": [0.1, 0.2, 0.3]}]})
+    )
+    respx.post("http://localhost:11434/api/generate").mock(
+        return_value=httpx.Response(200, json={"response": "Plex buffered."})
+    )
+    resp = await client.post("/search", json={"query": "did plex have buffering issues?"})
+    assert resp.status_code == 200
+    assert mock_qdrant.query_points.called
+    assert not mock_qdrant.scroll.called
+
+
+def test_is_meta_query_classification():
+    from app.main import _is_meta_query
+
+    assert _is_meta_query("which container has the most errors")
+    assert _is_meta_query("how many containers have errors")
+    assert _is_meta_query("count the errors per service")
+    assert _is_meta_query("list all containers")
+    assert not _is_meta_query("did plex have buffering issues?")
+    assert not _is_meta_query("any errors in sonarr?")

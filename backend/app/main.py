@@ -18,7 +18,8 @@ from .ingestion.chunker import chunk_streams
 from .ingestion.embedder import embed_text
 from .ingestion.indexer import ensure_collection, upsert_chunks
 from .ingestion.loki import fetch_streams
-from .search.llm import generate_answer
+from .search.aggregator import aggregate_by_service, build_stats_summary, scroll_all_chunks
+from .search.llm import generate_aggregate_answer, generate_answer
 from .search.retriever import search_chunks
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,24 @@ def _parse_time_filter(query: str) -> datetime | None:
         if m:
             return datetime.now(tz=timezone.utc) - delta_fn(m)
     return None
+
+
+_META_PATTERNS: list[re.Pattern] = [
+    re.compile(r"how many", re.I),
+    re.compile(r"how much", re.I),
+    re.compile(r"number of", re.I),
+    re.compile(r"\bcount\b", re.I),
+    re.compile(r"which (container|service|app)", re.I),
+    re.compile(r"what (container|service|app)", re.I),
+    re.compile(r"most (errors?|warnings?)", re.I),
+    re.compile(r"\bdistinct\b", re.I),
+    re.compile(r"across all", re.I),
+    re.compile(r"list (the |all )?(containers|services|apps)", re.I),
+]
+
+
+def _is_meta_query(query: str) -> bool:
+    return any(pattern.search(query) for pattern in _META_PATTERNS)
 
 
 async def run_ingestion() -> None:
@@ -160,6 +179,9 @@ async def ingest():
 
 @app.post("/search", response_model=SearchResponse)
 async def search(req: SearchRequest):
+    if _is_meta_query(req.query):
+        return await _search_aggregate(req.query)
+
     try:
         query_vector = await embed_text(settings.embed_url, settings.embed_model, req.query)
     except Exception:
@@ -186,3 +208,30 @@ async def search(req: SearchRequest):
     if answer is None:
         return SearchResponse(answer=None, answer_status="llm_unavailable", sources=sources)
     return SearchResponse(answer=answer, answer_status="ok", sources=sources)
+
+
+async def _search_aggregate(query: str) -> SearchResponse:
+    """Answer a meta-question with deterministic stats over the whole corpus."""
+    since = _parse_time_filter(query)
+
+    try:
+        chunks, truncated = await scroll_all_chunks(
+            qdrant,
+            settings.collection_name,
+            since=since,
+            max_chunks=settings.aggregate_max_chunks,
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="Vector search unavailable")
+
+    if not chunks:
+        return SearchResponse(answer=None, answer_status="no_results", sources=[])
+
+    per_service = aggregate_by_service(chunks)
+    stats = build_stats_summary(per_service, since, truncated)
+    answer = await generate_aggregate_answer(
+        settings.ollama_url, settings.ollama_model, query, stats
+    )
+    if answer is None:
+        return SearchResponse(answer=None, answer_status="llm_unavailable", sources=[])
+    return SearchResponse(answer=answer, answer_status="ok", sources=[])
