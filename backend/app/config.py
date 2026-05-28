@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     collection_name: str = "logseerr"
     search_top_k: int = 10
     search_min_score: float = 0.0
+    aggregate_max_chunks: int = 10000
     loki_page_limit: int = 5000
     loki_max_pages: int = 50
 
