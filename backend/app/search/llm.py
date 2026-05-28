@@ -2,7 +2,9 @@ import httpx
 
 _PROMPT_TEMPLATE = """\
 You are a log analysis assistant. Answer the user's question based only on the log excerpts below.
-Be concise and specific. If the logs contain no relevant information, say so clearly.
+Be concise and specific. Use markdown formatting: bold for key terms, code blocks for log lines or \
+values, and bullet lists when listing multiple items. If the logs contain no relevant information, \
+say so clearly.
 
 Log excerpts:
 {context}
