@@ -8,3 +8,5 @@ dist/
 .vite/
 
 .worktrees/
+.claude/settings.json
+.mcp.json
