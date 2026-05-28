@@ -2,14 +2,14 @@
   <div
     role="status"
     aria-live="polite"
-    class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+    class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
   >
     <svg
       :viewBox="`0 0 ${WIDTH} ${HEIGHT}`"
       class="block w-full h-[200px] overflow-visible"
       aria-hidden="true"
     >
-      <g class="text-gray-300">
+      <g class="text-gray-300 dark:text-gray-600">
         <circle
           v-for="(p, i) in points"
           :key="`bg-${i}`"
@@ -53,7 +53,7 @@
       />
     </svg>
 
-    <div class="mt-4 text-center text-sm text-gray-600 min-h-[1.25rem]">
+    <div class="mt-4 text-center text-sm text-gray-600 min-h-[1.25rem] dark:text-gray-400">
       <Transition name="caption" mode="out-in">
         <span :key="captionIndex">{{ stages[captionIndex] }}</span>
       </Transition>
@@ -195,5 +195,16 @@ onBeforeUnmount(() => {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.15); }
   }
+}
+
+/* Dark mode: brighten animated nodes against dark background */
+:global(.dark) .query-node {
+  color: oklch(0.707 0.165 254.624); /* blue-400 */
+}
+:global(.dark) .edge-line {
+  color: oklch(0.707 0.165 254.624); /* blue-400 */
+}
+:global(.dark) .neighbor-pulse {
+  color: oklch(0.707 0.165 254.624); /* blue-400 */
 }
 </style>
