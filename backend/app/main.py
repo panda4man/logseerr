@@ -57,6 +57,8 @@ async def run_ingestion() -> None:
             loki_url=settings.loki_url,
             start_ns=now_ns - lookback_ns,
             end_ns=now_ns,
+            page_limit=settings.loki_page_limit,
+            max_pages=settings.loki_max_pages,
         )
     except Exception:
         logger.exception("Failed to fetch from Loki — skipping run")
@@ -70,7 +72,9 @@ async def run_ingestion() -> None:
     vectors, valid_chunks = [], []
     for chunk in chunks:
         try:
-            vector = await embed_text(settings.embed_url, settings.embed_model, chunk.log_text)
+            vector = await embed_text(
+                settings.embed_url, settings.embed_model, chunk.embedding_text
+            )
             vectors.append(vector)
             valid_chunks.append(chunk)
         except Exception:
@@ -109,6 +113,7 @@ class SearchRequest(BaseModel):
 
 class SearchResponse(BaseModel):
     answer: str | None
+    answer_status: str
     sources: list[dict]
 
 
@@ -163,9 +168,21 @@ async def search(req: SearchRequest):
     since = _parse_time_filter(req.query)
 
     try:
-        sources = await search_chunks(qdrant, settings.collection_name, query_vector, since=since)
+        sources = await search_chunks(
+            qdrant,
+            settings.collection_name,
+            query_vector,
+            since=since,
+            top_k=settings.search_top_k,
+            min_score=settings.search_min_score or None,
+        )
     except Exception:
         raise HTTPException(status_code=503, detail="Vector search unavailable")
 
+    if not sources:
+        return SearchResponse(answer=None, answer_status="no_results", sources=[])
+
     answer = await generate_answer(settings.ollama_url, settings.ollama_model, req.query, sources)
-    return SearchResponse(answer=answer, sources=sources)
+    if answer is None:
+        return SearchResponse(answer=None, answer_status="llm_unavailable", sources=sources)
+    return SearchResponse(answer=answer, answer_status="ok", sources=sources)

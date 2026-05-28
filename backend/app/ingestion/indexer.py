@@ -39,11 +39,9 @@ async def upsert_chunks(
                 "service": chunk.service,
                 "start_time": chunk.start_time.timestamp(),
                 "end_time": chunk.end_time.timestamp(),
-                "time_range": (
-                    f"{chunk.start_time.strftime('%Y-%m-%d %H:%M')}"
-                    f"–{chunk.end_time.strftime('%H:%M')} UTC"
-                ),
+                "time_range": chunk.time_range,
                 "log_text": chunk.log_text,
+                "levels": chunk.levels,
             },
         )
         for chunk, vector in zip(chunks, vectors)

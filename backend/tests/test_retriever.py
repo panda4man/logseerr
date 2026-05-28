@@ -64,3 +64,33 @@ async def test_search_without_time_filter_returns_all(populated_qdrant):
         populated_qdrant, COLLECTION, [1.0, 0.0, 0.0, 0.0], since=None, top_k=10
     )
     assert len(results) == 2
+
+
+async def test_search_results_include_score(populated_qdrant):
+    results = await search_chunks(
+        populated_qdrant, COLLECTION, [1.0, 0.0, 0.0, 0.0], top_k=10
+    )
+    assert all("score" in r for r in results)
+    plex = next(r for r in results if r["service"] == "plex")
+    sonarr = next(r for r in results if r["service"] == "sonarr")
+    assert plex["score"] > sonarr["score"]
+
+
+async def test_search_results_include_levels(populated_qdrant):
+    results = await search_chunks(
+        populated_qdrant, COLLECTION, [1.0, 0.0, 0.0, 0.0], top_k=10
+    )
+    assert all("levels" in r and isinstance(r["levels"], list) for r in results)
+
+
+async def test_search_min_score_filters_weak_hits(populated_qdrant):
+    # sonarr vector is orthogonal to query → cosine ~0; plex aligned → 1.
+    results = await search_chunks(
+        populated_qdrant,
+        COLLECTION,
+        [1.0, 0.0, 0.0, 0.0],
+        top_k=10,
+        min_score=0.5,
+    )
+    services = {r["service"] for r in results}
+    assert services == {"plex"}

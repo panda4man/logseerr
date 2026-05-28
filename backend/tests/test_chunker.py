@@ -58,3 +58,59 @@ def test_chunk_has_correct_timestamps():
 
 def test_empty_streams_returns_empty():
     assert chunk_streams([]) == []
+
+
+def test_chunk_aggregates_distinct_levels_from_labels():
+    streams = [
+        LokiStream(service="plex", labels={"level": "info"}, values=[(BASE_NS, "ok")]),
+        LokiStream(
+            service="plex",
+            labels={"level": "error"},
+            values=[(BASE_NS + 60_000_000_000, "bad")],
+        ),
+        LokiStream(
+            service="plex",
+            labels={"level": "info"},
+            values=[(BASE_NS + 120_000_000_000, "ok2")],
+        ),
+    ]
+    chunks = chunk_streams(streams)
+    assert len(chunks) == 1
+    assert chunks[0].levels == ["error", "info"]
+
+
+def test_chunk_levels_picks_up_detected_level():
+    stream = LokiStream(
+        service="plex",
+        labels={"detected_level": "warn"},
+        values=[(BASE_NS, "hmm")],
+    )
+    chunks = chunk_streams([stream])
+    assert chunks[0].levels == ["warn"]
+
+
+def test_chunk_levels_empty_when_no_level_labels():
+    stream = LokiStream(service="plex", labels={}, values=[(BASE_NS, "x")])
+    chunks = chunk_streams([stream])
+    assert chunks[0].levels == []
+
+
+def test_chunk_time_range_property():
+    stream = LokiStream(service="plex", values=[(BASE_NS, "x")])
+    chunks = chunk_streams([stream])
+    assert "2024" in chunks[0].time_range
+    assert "UTC" in chunks[0].time_range
+
+
+def test_chunk_embedding_text_includes_service_levels_time_and_log():
+    stream = LokiStream(
+        service="plex",
+        labels={"level": "error"},
+        values=[(BASE_NS, "boom")],
+    )
+    chunks = chunk_streams([stream])
+    text = chunks[0].embedding_text
+    assert "plex" in text
+    assert "error" in text
+    assert "boom" in text
+    assert "2024" in text

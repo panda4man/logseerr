@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3"
     ingest_interval_minutes: int = 15
     collection_name: str = "logseerr"
+    search_top_k: int = 10
+    search_min_score: float = 0.0
+    loki_page_limit: int = 5000
+    loki_max_pages: int = 50
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

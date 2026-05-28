@@ -16,8 +16,10 @@
         {{ error }}
       </div>
 
+      <SearchLoader v-if="loading && !result" />
+
       <template v-if="result">
-        <AnswerCard :answer="result.answer" />
+        <AnswerCard :answer="result.answer" :status="result.answer_status" />
         <SourceList :sources="result.sources" />
       </template>
 
@@ -28,6 +30,7 @@
 <script setup>
 import { ref } from 'vue'
 import SearchBar from './components/SearchBar.vue'
+import SearchLoader from './components/SearchLoader.vue'
 import AnswerCard from './components/AnswerCard.vue'
 import SourceList from './components/SourceList.vue'
 import { search } from './api'

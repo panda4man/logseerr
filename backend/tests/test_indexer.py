@@ -46,6 +46,21 @@ async def test_upsert_chunks_stores_payload(qdrant):
     assert payload["log_text"] == "stream started\nbuffering error"
 
 
+async def test_upsert_chunks_stores_levels_in_payload(qdrant):
+    await ensure_collection(qdrant, COLLECTION, VECTOR_SIZE)
+    chunk = LogChunk(
+        service="plex",
+        start_time=datetime(2024, 5, 27, 0, 0, tzinfo=timezone.utc),
+        end_time=datetime(2024, 5, 27, 0, 5, tzinfo=timezone.utc),
+        log_text="boom",
+        levels=["error", "info"],
+    )
+    await upsert_chunks(qdrant, COLLECTION, [chunk], [[0.1, 0.2, 0.3, 0.4]])
+    results = await qdrant.scroll(COLLECTION, limit=10, with_payload=True)
+    payload = results[0][0].payload
+    assert payload["levels"] == ["error", "info"]
+
+
 async def test_upsert_is_idempotent(qdrant):
     await ensure_collection(qdrant, COLLECTION, VECTOR_SIZE)
     chunk = LogChunk(

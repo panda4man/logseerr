@@ -10,6 +10,7 @@ async def search_chunks(
     query_vector: list[float],
     since: datetime | None = None,
     top_k: int = 10,
+    min_score: float | None = None,
 ) -> list[dict]:
     query_filter = None
     if since is not None:
@@ -30,11 +31,18 @@ async def search_chunks(
         with_payload=True,
     )
 
-    return [
-        {
-            "service": hit.payload["service"],
-            "time_range": hit.payload["time_range"],
-            "log_text": hit.payload["log_text"],
-        }
-        for hit in results.points
-    ]
+    hits = []
+    for hit in results.points:
+        if min_score is not None and hit.score < min_score:
+            continue
+        payload = hit.payload or {}
+        hits.append(
+            {
+                "service": payload.get("service", "unknown"),
+                "time_range": payload.get("time_range", ""),
+                "log_text": payload.get("log_text", ""),
+                "levels": payload.get("levels", []),
+                "score": hit.score,
+            }
+        )
+    return hits
