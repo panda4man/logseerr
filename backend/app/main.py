@@ -146,6 +146,13 @@ async def health():
     return JSONResponse(content={"status": "ok" if all_ok else "degraded", **checks}, status_code=status_code)
 
 
+@app.post("/ingest", status_code=202)
+async def ingest():
+    import asyncio
+    asyncio.create_task(run_ingestion())
+    return {"status": "ingestion started"}
+
+
 @app.post("/search", response_model=SearchResponse)
 async def search(req: SearchRequest):
     try:

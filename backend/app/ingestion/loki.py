@@ -10,7 +10,7 @@ class LokiStream:
 
 async def fetch_streams(loki_url: str, start_ns: int, end_ns: int) -> list[LokiStream]:
     params = {
-        "query": '{job=~".+"}',
+        "query": '{container=~".+"}',
         "start": str(start_ns),
         "end": str(end_ns),
         "limit": "5000",
@@ -27,7 +27,7 @@ async def fetch_streams(loki_url: str, start_ns: int, end_ns: int) -> list[LokiS
     streams = []
     for result in resp.json()["data"]["result"]:
         labels = result["stream"]
-        service = labels.get("job") or labels.get("app", "unknown")
+        service = labels.get("job") or labels.get("compose_service") or labels.get("container") or labels.get("app", "unknown")
         values = [(int(ts), line) for ts, line in result["values"]]
         streams.append(LokiStream(service=service, values=values))
     return streams
